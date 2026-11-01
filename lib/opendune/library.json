@@ -1,0 +1,11 @@
+{
+  "name": "opendune",
+  "version": "0.0.0",
+  "description": "Vendored OpenDUNE engine core, trimmed to platform-independent files, for the T-Deck port.",
+  "build": {
+    "includeDir": "src",
+    "flags": [
+      "-Ilib/opendune/src"
+    ]
+  }
+}
