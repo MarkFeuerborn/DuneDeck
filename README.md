@@ -96,9 +96,7 @@ Check the speaker/I2S wiring and `dsp_tdeck.cpp` first. I have found scrolling t
 ## Controls
 
 - **Trackball** moves the mouse cursor; **trackball click** is the left
-  mouse button (Dune II's primary input). See Troubleshooting below - as
-  of this version, clicks not registering in menus is an open issue with
-  added diagnostics, not yet a confirmed fix.
+  mouse button (Dune II's primary input).
 - **Enter and Space** act as additional inputs for the left mouse button, so you can also use them instead of the trackball.  
 - **Backspace** acts as a right-click for deselect, or canceling a command or building placement.
 - **I/J/K/L** move the mouse cursor up/left/down/right (a fixed step per
