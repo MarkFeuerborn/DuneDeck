@@ -2,7 +2,7 @@
 
 A PlatformIO port of [OpenDUNE](https://github.com/OpenDUNE/OpenDUNE) (a GPLv2
 reimplementation of the Dune II engine) targeting the LilyGO T-Deck and T-Deck Plus
-(ESP32-S3). The .bin release works with [bmorcelli Launcher](https://bmorcelli.github.io/Launcher/), or can directly flashed to the T-Deck.
+(ESP32-S3). The .bin release works with [bmorcelli Launcher](https://bmorcelli.github.io/Launcher/), or can be directly flashed to the T-Deck.
 
 ## Disclaimer
 
