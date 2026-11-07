@@ -4,11 +4,17 @@ A PlatformIO port of [OpenDUNE](https://github.com/OpenDUNE/OpenDUNE) (a GPLv2
 reimplementation of the Dune II engine) targeting the LilyGO T-Deck and T-Deck Plus
 (ESP32-S3). The .bin release works with [bmorcelli Launcher](https://bmorcelli.github.io/Launcher/), or can be directly flashed to the T-Deck.
 
+<img width="651" height="602" alt="IMG_20261029_215341_851c" src="https://github.com/user-attachments/assets/e243ce97-2c12-47c0-a6de-228bfff2cc2a" />
+
+<img width="651" height="599" alt="IMG_20261029_215815_600b" src="https://github.com/user-attachments/assets/ba67943c-d19d-4509-8451-3728e589a5b7" />
+
 ## Disclaimer
 
 This port was created using Claude Sonnet 5.5, but also went through extensive testing on multiple real T-Decks. The T-Deck's trackball lends itself as an interesting novelty for an RTS, and it's a surprisingly fun way to play the game if you also familiarize yourself with keyboard shortcuts for commands. A full playthrough of the game has not been completed with DuneDeck yet. However, input controls for the game menus and missions, advancing through multiple missions, and functions like saving and loading a game have all been tested and confirmed to work on real hardware.
 
 Just like in OpenDUNE, this port includes the anti-piracy measure that was in the original game. After the first mission, your Mentat will prompt you with a question that requires reading the game manual to answer. Having a physical or digital copy of the manual to look up the answer will come in handy.
+
+<img width="651" height="528" alt="IMG_20261029_215842_832b" src="https://github.com/user-attachments/assets/c66f14ba-e4ed-4a2d-a438-7074f9dcade5" />
 
 ## What's in this repo
 
