@@ -6,7 +6,7 @@ reimplementation of the Dune II engine) targeting the LilyGO T-Deck and T-Deck P
 
 ## Disclaimer
 
-This port was created using Claude Sonnet 5.5, but also went through extensive testing on multiple real T-Decks. The T-Deck's trackball lends itself as an interesting novelty for an RTS, and it's a surprisingly fun way to play the game if you also familiarize yourself with keyboard shortcuts for commands. A full playthrough of the game has not been completed with DuneDeck yet. However, input controls in the game menus and during a mission, advancing through multiple missions, and functions like saving and loading a game have all been tested and confirmed to work on real hardware.
+This port was created using Claude Sonnet 5.5, but also went through extensive testing on multiple real T-Decks. The T-Deck's trackball lends itself as an interesting novelty for an RTS, and it's a surprisingly fun way to play the game if you also familiarize yourself with keyboard shortcuts for commands. A full playthrough of the game has not been completed with DuneDeck yet. However, input controls for the game menus and missions, advancing through multiple missions, and functions like saving and loading a game have all been tested and confirmed to work on real hardware.
 
 ## What's in this repo
 
