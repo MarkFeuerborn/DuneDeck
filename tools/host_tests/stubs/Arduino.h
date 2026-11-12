@@ -4,7 +4,9 @@
 #include <stdio.h>
 #include <string.h>
 #define IRAM_ATTR
-#define INPUT_PULLUP 2
+#define INPUT 1
+#define OUTPUT 2
+#define INPUT_PULLUP 5
 #define FALLING 2
 #define CHANGE 3
 #define LOW 0
