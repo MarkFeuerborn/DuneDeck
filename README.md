@@ -97,6 +97,7 @@ Check the speaker/I2S wiring and `dsp_tdeck.cpp` first. I have found scrolling t
 
 - **Trackball** moves the mouse cursor; **trackball click** is the left
   mouse button (Dune II's primary input).
+- **Touchscreen** also works, and tapping the screen registers an immediate left-click at the position touched. It also moves the in-game cursor to the touched position. This is handy for moving the viewport within a mission by touching the minimap, or quickly selecting a unit and giving a command with the on-screen order buttons. 
 - **Enter and Space** act as additional inputs for the left mouse button, so you can also use them instead of the trackball.  
 - **Backspace** acts as a right-click for deselect, or canceling a command or building placement.
 - **I/J/K/L** move the mouse cursor up/left/down/right (a fixed step per
