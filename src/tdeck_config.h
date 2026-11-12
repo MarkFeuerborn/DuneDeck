@@ -4,13 +4,35 @@
  * Most of these can also be overridden from platformio.ini via -D flags.
  */
 
-// Set to 1 only on a T-Deck PLUS (GT911 capacitive touch panel present).
-// The standard T-Deck has NO touchscreen - only trackball + keyboard - and
-// enabling this on a standard T-Deck will simply find no device at the GT911
-// I2C address and silently do nothing (harmless, but wastes a bit of boot
-// time probing for it).
+// 1 = support the GT911 capacitive touchscreen. Real T-Deck units (not just
+// the "Plus") have one; if no controller answers on the I2C bus at startup,
+// touch is disabled automatically and everything else is unaffected.
+// A touch moves the cursor to the finger and left-clicks there.
 #ifndef TDECK_HAS_TOUCH
-#define TDECK_HAS_TOUCH 0
+#define TDECK_HAS_TOUCH 1
+#endif
+
+// Touch orientation. Defaults match LilyGO's own T-Deck touch example
+// (swap XY, mirror Y, 320x240): if touches land in the wrong place on a unit,
+// the touch log lines show raw vs mapped coordinates; flip these to fix it.
+#ifndef TDECK_TOUCH_SWAP_XY
+#define TDECK_TOUCH_SWAP_XY 1
+#endif
+#ifndef TDECK_TOUCH_MIRROR_X
+#define TDECK_TOUCH_MIRROR_X 0
+#endif
+#ifndef TDECK_TOUCH_MIRROR_Y
+#define TDECK_TOUCH_MIRROR_Y 1
+#endif
+// Touch timing (milliseconds / polls).
+#ifndef TDECK_TOUCH_POLL_MS
+#define TDECK_TOUCH_POLL_MS 12          // how often the controller is read
+#endif
+#ifndef TDECK_TOUCH_RELEASE_POLLS
+#define TDECK_TOUCH_RELEASE_POLLS 4     // consecutive empty reads before a release
+#endif
+#ifndef TDECK_TOUCH_MIN_HOLD_MS
+#define TDECK_TOUCH_MIN_HOLD_MS 40      // minimum press length (engine rate-limits fast clicks)
 #endif
 
 // SPI clock for the ST7789 panel. 40 MHz is a safe, widely-used value for

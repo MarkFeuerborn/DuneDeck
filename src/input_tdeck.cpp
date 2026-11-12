@@ -122,6 +122,11 @@ static bool s_synthLeft = false;
 static bool s_synthRight = false;
 static uint32_t s_synthReleaseAt = 0;
 #define TDECK_SYNTH_CLICK_HOLD_MS 50
+
+// A finger is on the touchscreen. Kept separate from s_leftDown (the
+// trackball button) so the two can never cancel each other out; every path
+// that reports button state to the engine ORs this in.
+static bool s_touchDown = false;
 static uint32_t s_clickDebounceAt = 0;
 
 // ---------------------------------------------------------------------
@@ -217,7 +222,7 @@ static bool TDeck_HandleNavigationKey(uint8_t raw)
 		if (ny > g_tdeckMouseMaxY) ny = g_tdeckMouseMaxY;
 		g_tdeckMouseX = (uint16_t)nx;
 		g_tdeckMouseY = (uint16_t)ny;
-		TDeck_TracedMouseEvent("IJKL-move", g_tdeckMouseX, g_tdeckMouseY, s_leftDown || s_synthLeft, s_rightDown || s_synthRight);
+		TDeck_TracedMouseEvent("IJKL-move", g_tdeckMouseX, g_tdeckMouseY, s_leftDown || s_synthLeft || s_touchDown, s_rightDown || s_synthRight);
 	}
 
 	if (isClick) {
@@ -231,7 +236,7 @@ static bool TDeck_HandleNavigationKey(uint8_t raw)
 			if (clickIsLeft) s_synthLeft = true; else s_synthRight = true;
 			s_synthReleaseAt = millis() + TDECK_SYNTH_CLICK_HOLD_MS;
 			TDeck_TracedMouseEvent(clickIsLeft ? "Enter-click-down" : "Backspace-click-down",
-				g_tdeckMouseX, g_tdeckMouseY, s_leftDown || s_synthLeft, s_rightDown || s_synthRight);
+				g_tdeckMouseX, g_tdeckMouseY, s_leftDown || s_synthLeft || s_touchDown, s_rightDown || s_synthRight);
 		}
 	}
 
@@ -429,52 +434,142 @@ static void TDeck_PollKeyboard(void)
 }
 
 // ---------------------------------------------------------------------
-// Optional GT911 touch (T-Deck PLUS only - see tdeck_config.h)
+// GT911 capacitive touchscreen (present on T-Deck units generally - not just
+// the "Plus"; an earlier note here claiming otherwise was an assumption that
+// real units disproved). If no controller answers on the I2C bus, touch is
+// simply disabled and everything else runs as before.
 // ---------------------------------------------------------------------
+//
+// Behaviour: a touch moves the on-screen cursor to the finger and presses the
+// LEFT mouse button there; dragging moves the cursor with the button held
+// (so drag-select works); lifting releases. It is the same input as a
+// trackball press, Enter or Space, just at an absolute position.
+//
+// ORDER MATTERS on touch-down: the engine's Mouse_EventHandler() applies the
+// BUTTON change first and the POSITION second, and Input_HandleInput() records
+// a click's coordinates from the cursor position at that moment. So a press
+// delivered in the same call as a big cursor jump would click where the cursor
+// USED to be. We therefore send a position-only event first (cursor teleports
+// to the finger, no button change), then the press at that same position.
 
 #if TDECK_HAS_TOUCH
 static TouchDrvGT911 s_touch;
 static bool s_touchReady = false;
+static uint8_t s_touchMisses = 0;          // consecutive empty polls while a touch is down
+static uint32_t s_touchPressedAt = 0;
+static uint32_t s_touchLastPollAt = 0;
+static uint32_t s_touchLastIgnoredLogAt = 0;
 
 static void TDeck_Touch_Init(void)
 {
-	pinMode(TDECK_TOUCH_INT, INPUT);
-	s_touchReady = s_touch.begin(Wire, TDECK_TOUCH_ADDR, TDECK_I2C_SDA, TDECK_I2C_SCL);
-	if (s_touchReady) {
-		/* Physical panel is 320x240; our game canvas is centered at
-		 * (0, (240-200)/2) within it - see video_tdeck.cpp OFFSET_Y. */
-		s_touch.setMaxCoordinates(320, 240);
+	/* The GT911 answers at 0x5D or 0x14 depending on how it latched at
+	 * power-up. LilyGO's own T-Deck example uses 0x5D (SensorLib's
+	 * GT911_SLAVE_ADDRESS_L); probe both rather than assume. */
+	static const uint8_t kAddrs[2] = { TDECK_TOUCH_ADDR, 0x14 };
+	uint8_t addr = 0;
+	for (int i = 0; i < 2 && addr == 0; i++) {
+		Wire.beginTransmission(kAddrs[i]);
+		if (Wire.endTransmission() == 0) addr = kAddrs[i];
 	}
+	if (addr == 0) {
+		Serial.println("[touch] no GT911 answered at 0x5D or 0x14 - touchscreen disabled");
+		return;
+	}
+
+	pinMode(TDECK_TOUCH_INT, INPUT);
+	s_touch.setPins(-1, TDECK_TOUCH_INT);    /* no reset pin wired; INT on GPIO16 (as in LilyGO's example) */
+	if (!s_touch.begin(Wire, addr, TDECK_I2C_SDA, TDECK_I2C_SCL)) {
+		Serial.printf("[touch] GT911 at 0x%02X did not initialise - touchscreen disabled\n", addr);
+		return;
+	}
+	/* Orientation exactly as LilyGO's own T-Deck touch example: the panel's
+	 * native frame is rotated relative to the landscape display, so swap
+	 * XY then mirror Y (SensorLib applies swap first, then mirrors using the
+	 * max value). Adjustable in tdeck_config.h if a unit disagrees. */
+	s_touch.setMaxCoordinates(320, 240);
+	s_touch.setSwapXY(TDECK_TOUCH_SWAP_XY);
+	s_touch.setMirrorXY(TDECK_TOUCH_MIRROR_X, TDECK_TOUCH_MIRROR_Y);
+	s_touchReady = true;
+	Serial.printf("[touch] GT911 ready at 0x%02X (swapXY=%d mirrorX=%d mirrorY=%d)\n",
+				  addr, TDECK_TOUCH_SWAP_XY, TDECK_TOUCH_MIRROR_X, TDECK_TOUCH_MIRROR_Y);
+}
+
+/* Panel coordinates (320x240, already swapped/mirrored by the library) ->
+ * game canvas coordinates (320x200, centred vertically: see video_tdeck.cpp
+ * OFFSET_Y). `strict` is used for a NEW touch: one landing in the unused
+ * strip above/below the canvas is rejected rather than clamped, so a stray
+ * touch on the black bars can't click the nearest game pixel. A touch that is
+ * already down and drags into a strip is clamped instead, so the drag goes on. */
+static bool TDeck_TouchToGame(int32_t px, int32_t py, bool strict, int32_t *gx, int32_t *gy)
+{
+	const int32_t offY = (240 - SCREEN_HEIGHT) / 2;
+	const int32_t minX = (int32_t)g_tdeckMouseMinX, maxX = (int32_t)g_tdeckMouseMaxX;
+	const int32_t minY = (int32_t)g_tdeckMouseMinY, maxY = (int32_t)g_tdeckMouseMaxY;
+	int32_t x = px, y = py - offY;
+	if (x < minX) x = minX;
+	if (x > maxX) x = maxX;                  /* the library can return the max value itself (e.g. 320) */
+	if (y < minY || y > maxY) {
+		if (strict) return false;
+		y = (y < minY) ? minY : maxY;
+	}
+	*gx = x;
+	*gy = y;
+	return true;
 }
 
 static void TDeck_PollTouch(void)
 {
 	if (!s_touchReady) return;
+	uint32_t now = millis();
+	if ((now - s_touchLastPollAt) < TDECK_TOUCH_POLL_MS) return;
+	s_touchLastPollAt = now;
 
-	int16_t x[5], y[5];
-	uint8_t n = s_touch.getPoint(x, y, 5);
-	if (n == 0) {
-		if (s_leftDown) {
-			s_leftDown = false;
-			TDeck_TracedMouseEvent("touch-release", g_tdeckMouseX, g_tdeckMouseY, false, s_rightDown);
+	int16_t x[1] = { 0 }, y[1] = { 0 };
+	uint8_t n = s_touch.getPoint(x, y, 1);   /* first finger only; GT911 clears its buffer on every read */
+
+	if (n > 0) {
+		s_touchMisses = 0;
+		int32_t gx = 0, gy = 0;
+		if (!s_touchDown) {
+			if (!TDeck_TouchToGame(x[0], y[0], true, &gx, &gy)) {
+				if (now - s_touchLastIgnoredLogAt > 500) {
+					s_touchLastIgnoredLogAt = now;
+					Serial.printf("[touch] ignored touch outside the game canvas: raw=(%d,%d)\n", (int)x[0], (int)y[0]);
+				}
+				return;
+			}
+			g_tdeckMouseX = (uint16_t)gx;
+			g_tdeckMouseY = (uint16_t)gy;
+			/* (1) cursor jumps to the finger - position only, no button change... */
+			TDeck_TracedMouseEvent("touch-move", g_tdeckMouseX, g_tdeckMouseY,
+				s_leftDown || s_synthLeft, s_rightDown || s_synthRight);
+			/* (2) ...then the press lands at that position. */
+			s_touchDown = true;
+			s_touchPressedAt = now;
+			Serial.printf("[touch] down raw=(%d,%d) -> game=(%d,%d)\n", (int)x[0], (int)y[0], (int)gx, (int)gy);
+			TDeck_TracedMouseEvent("touch-down", g_tdeckMouseX, g_tdeckMouseY, true, s_rightDown || s_synthRight);
+		} else {
+			TDeck_TouchToGame(x[0], y[0], false, &gx, &gy);
+			if (gx != (int32_t)g_tdeckMouseX || gy != (int32_t)g_tdeckMouseY) {
+				g_tdeckMouseX = (uint16_t)gx;
+				g_tdeckMouseY = (uint16_t)gy;
+				TDeck_TracedMouseEvent("touch-drag", g_tdeckMouseX, g_tdeckMouseY, true, s_rightDown || s_synthRight);
+			}
 		}
-		return;
+	} else if (s_touchDown) {
+		/* A single empty read mid-touch is normal for this chip (it clears
+		 * its status on every read and takes a moment to repost), so release
+		 * only after several in a row - and never sooner than a minimum hold,
+		 * so the engine always sees a real press-then-release. */
+		if (s_touchMisses < 255) s_touchMisses++;
+		if (s_touchMisses >= TDECK_TOUCH_RELEASE_POLLS && (now - s_touchPressedAt) >= TDECK_TOUCH_MIN_HOLD_MS) {
+			s_touchDown = false;
+			s_touchMisses = 0;
+			TDeck_TracedMouseEvent("touch-up", g_tdeckMouseX, g_tdeckMouseY,
+				s_leftDown || s_synthLeft, s_rightDown || s_synthRight);
+			Serial.printf("[touch] up at game=(%u,%u)\n", (unsigned)g_tdeckMouseX, (unsigned)g_tdeckMouseY);
+		}
 	}
-
-	const int16_t OFFSET_Y = (240 - SCREEN_HEIGHT) / 2;
-	int32_t gx = x[0];
-	int32_t gy = y[0] - OFFSET_Y;
-
-	if (gx < g_tdeckMouseMinX) gx = g_tdeckMouseMinX;
-	if (gx > g_tdeckMouseMaxX) gx = g_tdeckMouseMaxX;
-	if (gy < g_tdeckMouseMinY) gy = g_tdeckMouseMinY;
-	if (gy > g_tdeckMouseMaxY) gy = g_tdeckMouseMaxY;
-
-	g_tdeckMouseX = (uint16_t)gx;
-	g_tdeckMouseY = (uint16_t)gy;
-	s_leftDown = true;
-
-	TDeck_TracedMouseEvent("touch-press", g_tdeckMouseX, g_tdeckMouseY, true, s_rightDown);
 }
 #endif /* TDECK_HAS_TOUCH */
 
@@ -524,7 +619,7 @@ extern "C" void TDeck_PollInput(void)
 		s_synthLeft = false;
 		s_synthRight = false;
 		TDeck_TracedMouseEvent(wasLeft ? "Enter-click-up" : "Backspace-click-up",
-			g_tdeckMouseX, g_tdeckMouseY, s_leftDown, s_rightDown);
+			g_tdeckMouseX, g_tdeckMouseY, s_leftDown || s_touchDown, s_rightDown);
 	}
 
 	/* --- Trackball click (left button) --- */
@@ -613,7 +708,7 @@ extern "C" void TDeck_PollInput(void)
 	}
 
 	if (moved || leftChanged) {
-		TDeck_TracedMouseEvent("trackball-normal", g_tdeckMouseX, g_tdeckMouseY, s_leftDown || s_synthLeft, s_rightDown || s_synthRight);
+		TDeck_TracedMouseEvent("trackball-normal", g_tdeckMouseX, g_tdeckMouseY, s_leftDown || s_synthLeft || s_touchDown, s_rightDown || s_synthRight);
 	}
 
 	/* --- Keyboard (I2C, interrupt-gated so we don't hammer the bus) --- */

@@ -33,7 +33,7 @@
 #define TDECK_I2C_SDA           18
 #define TDECK_I2C_SCL           8
 
-#define TDECK_TOUCH_INT         16   // GT911 - T-Deck Plus only
+#define TDECK_TOUCH_INT         16   // GT911 touch controller interrupt line
 
 #define TDECK_KEYBOARD_INT      46
 #define TDECK_KEYBOARD_ADDR     0x55
@@ -58,5 +58,5 @@
 
 #define TDECK_BAT_ADC           4
 
-// GT911 default I2C address (only meaningful if TDECK_HAS_TOUCH is set)
+// GT911 I2C address to try first (0x14 is also probed) - only meaningful if TDECK_HAS_TOUCH is set
 #define TDECK_TOUCH_ADDR        0x5D
