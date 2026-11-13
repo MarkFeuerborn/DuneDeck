@@ -123,9 +123,6 @@ Check the speaker/I2S wiring and `dsp_tdeck.cpp` first. I have found scrolling t
 - **P** cues placement of a building or concrete that has finished construction.  
 - **Keyboard** also sends any other hotkeys/shortcuts you'd use on PC
   (Q for quit, F1-F3 for Mentat/options/structure menus, etc.).
-- **Touch** (T-Deck **Plus** only - the standard T-Deck has no
-  touchscreen; see `tdeck_config.h`'s `TDECK_HAS_TOUCH`) acts as an
-  absolute-position left-click pointer alongside the trackball.
 
 ### Keyboard fidelity limitation (please read)
 
